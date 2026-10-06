@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>萬海 2615 量化回測</title>
+<meta name="description" content="簡維均自學專案：以 Python 回測 MACD、乖離率、布林通道與 RSI 策略於萬海（2615）五年日資料，比較三個版本、買進持有與樣本外檢驗。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;800&display=swap">
+<style>
+/* Layout：單欄研究報告，頂部章節導覽；圖表放在固定淺色「圖版」上，像印出來的研究附圖 */
+:root{
+  --bg:#F5F5F9; --surface:#FFFFFF; --ink:#1F2333; --muted:#5C6378; --line:#DDE0EA;
+  --accent:#5B3FA0; --accent-soft:#EEE9F8; --blue:#3E6BC2; --hold:#3A3F52;
+  --good:#23845F; --bad:#B94A34; --plate:#FCFCFE; --plate-line:#E3E5EE;
+  --code-bg:#F0F0F6;
+  --f-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12141C; --surface:#1A1D28; --ink:#E6E8F0; --muted:#9CA3B8; --line:#2C3142;
+  --accent:#AE97EE; --accent-soft:#2A2440; --blue:#86A8EC; --hold:#C9CDD9;
+  --good:#5CC79D; --bad:#E58A74; --plate:#FCFCFE; --plate-line:#3A3F52; --code-bg:#20232F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12141C; --surface:#1A1D28; --ink:#E6E8F0; --muted:#9CA3B8; --line:#2C3142;
+  --accent:#AE97EE; --accent-soft:#2A2440; --blue:#86A8EC; --hold:#C9CDD9;
+  --good:#5CC79D; --bad:#E58A74; --plate:#FCFCFE; --plate-line:#3A3F52; --code-bg:#20232F; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.8;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav-in{max-width:1000px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:20px;height:52px;overflow-x:auto;scrollbar-width:none}
+.nav-in::-webkit-scrollbar{display:none}
+.nav .brand{font-family:var(--f-mono);font-size:13px;font-weight:500;color:var(--ink);white-space:nowrap;letter-spacing:.02em}
+.nav .brand b{color:var(--accent)}
+.nav a.l{font-size:14px;color:var(--muted);text-decoration:none;white-space:nowrap}
+.nav a.l:hover{color:var(--ink)}
+.nav .sp{flex:1}
+
+.wrap{max-width:1000px;margin:0 auto;padding-inline:20px;padding-block:0 80px}
+.prose{max-width:46em}
+
+header.hero{padding-block:56px 40px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:40px;align-items:end;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin:0 0 14px}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(34px,6vw,54px);line-height:1.15;margin:0 0 18px;text-wrap:balance;letter-spacing:.01em}
+h1 .tick{font-family:var(--f-mono);font-weight:500;font-size:.5em;color:var(--accent);vertical-align:.45em;margin-left:.3em;border:1.5px solid var(--accent);padding:0 .35em;border-radius:4px}
+.lede{font-size:17.5px;color:var(--muted);margin:0;max-width:34em}
+dl.spec{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 18px;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+dl.spec dt{color:var(--muted);white-space:nowrap}
+dl.spec dd{margin:0;font-variant-numeric:tabular-nums}
+
+.verdict{margin:36px 0 0;padding:24px 26px;background:var(--accent-soft);border-radius:12px;display:grid;gap:18px}
+.verdict p{margin:0;font-size:17px;line-height:1.75}
+.verdict p strong{color:var(--accent)}
+.score{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.score div{background:var(--surface);padding:14px 16px;display:grid;gap:2px}
+.score .k{font-size:13px;color:var(--muted)}
+.score .v{font-family:var(--f-mono);font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.3}
+.score .s{font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.score .hl .v{color:var(--accent)}
+
+section{padding-top:64px}
+h2{font-family:var(--f-display);font-weight:800;font-size:clamp(26px,3.6vw,32px);line-height:1.3;margin:0 0 8px;text-wrap:balance}
+.sec-label{font-family:var(--f-mono);font-size:12.5px;color:var(--accent);letter-spacing:.08em;margin:0 0 6px}
+h3{font-size:19px;font-weight:700;margin:36px 0 8px;text-wrap:balance}
+p{margin:0 0 14px}
+.muted{color:var(--muted)}
+ul.clean{margin:0 0 14px;padding-left:1.2em}
+ul.clean li{margin-bottom:6px}
+
+figure{margin:28px 0 8px}
+.plate{background:var(--plate);border:1px solid var(--plate-line);border-radius:10px;padding:10px;overflow-x:auto}
+.plate img{display:block;width:100%;height:auto;min-width:560px}
+figcaption{font-size:14px;color:var(--muted);margin-top:10px;line-height:1.7;max-width:52em}
+figcaption b{color:var(--ink);font-weight:700}
+
+.tbl{overflow-x:auto;margin:20px 0 8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14.5px;font-variant-numeric:tabular-nums}
+th,td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;color:var(--muted);font-weight:400}
+thead th{font-weight:700;font-size:13.5px;color:var(--ink);background:var(--code-bg)}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:var(--f-mono);font-size:13.5px}
+.col-v3{background:color-mix(in srgb,var(--accent-soft) 70%,transparent)}
+thead th.col-v3{color:var(--accent)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:0}
+
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:18px 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;min-width:0}
+.card h4{margin:0 0 6px;font-size:15.5px}
+.card p{font-size:14.5px;margin:0;color:var(--muted)}
+.card .tag{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+
+pre.rules{font-family:var(--f-mono);font-size:13.5px;line-height:1.75;background:var(--code-bg);border-radius:10px;padding:18px 20px;margin:18px 0;overflow-x:auto;color:var(--ink)}
+pre.rules .c{color:var(--muted)}
+pre.rules .k{color:var(--accent);font-weight:500}
+
+ol.timeline{list-style:none;margin:24px 0 0;padding:0;border-left:2px solid var(--line);display:grid;gap:26px}
+ol.timeline li{position:relative;padding-left:26px}
+ol.timeline li::before{content:"";position:absolute;left:-7px;top:9px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--muted)}
+ol.timeline li.key::before{border-color:var(--accent);background:var(--accent)}
+.tl-h{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+.tl-h strong{font-size:17px}
+.tl-h .r{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+ol.timeline p{margin:4px 0 0;font-size:15px;color:var(--muted)}
+
+.fix{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:14px;align-items:stretch;margin:22px 0}
+.fix .side{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;min-width:0}
+.fix .side.after{border-color:var(--accent)}
+.fix .lab{font-size:13px;color:var(--muted);margin-bottom:6px}
+.fix code{display:block;font-family:var(--f-mono);font-size:12.5px;background:var(--code-bg);padding:8px 10px;border-radius:6px;overflow-x:auto;white-space:pre;margin-bottom:10px}
+.fix .nums{font-family:var(--f-mono);font-size:15px;font-variant-numeric:tabular-nums}
+.fix .nums b{font-size:22px;font-weight:500}
+.fix .after .nums b{color:var(--accent)}
+.fix .arrow{display:grid;place-items:center;color:var(--muted);font-size:22px}
+
+.lessons{display:grid;gap:0;margin-top:20px;border-top:1px solid var(--line)}
+.lessons > div{display:grid;grid-template-columns:3.2em minmax(0,1fr);gap:12px;padding:18px 0;border-bottom:1px solid var(--line)}
+.lessons .n{font-family:var(--f-mono);font-size:14px;color:var(--accent);padding-top:3px}
+.lessons h4{margin:0 0 4px;font-size:17px}
+.lessons p{margin:0;font-size:15px;color:var(--muted)}
+
+footer{margin-top:72px;padding-top:24px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted);display:grid;gap:6px}
+
+@media (max-width:760px){
+  header.hero{grid-template-columns:1fr;gap:24px;padding-block:36px 28px}
+  .score{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid2{grid-template-columns:1fr}
+  .fix{grid-template-columns:1fr}
+  .fix .arrow{transform:rotate(90deg);padding:2px 0}
+  .verdict{padding:20px}
+}
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="章節">
+  <div class="nav-in">
+    <span class="brand"><b>2615</b> BACKTEST</span>
+    <span class="sp"></span>
+    <a class="l" href="https://chienweijyun03.github.io/">作品集首頁</a>
+    <a class="l" href="#method">方法</a>
+    <a class="l" href="#versions">改版歷程</a>
+    <a class="l" href="#results">結果</a>
+    <a class="l" href="#robust">穩健性檢驗</a>
+    <a class="l" href="#conclusion">結論</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">自學專案 · Python 量化回測 · 2025/07–08</p>
+      <h1>萬海量化回測<span class="tick">2615</span></h1>
+      <p class="lede">把 MACD、乖離率、布林通道與 RSI 寫成交易規則，在萬海五年的日收盤價上回測三個版本；最後用同一套方法重算所有績效，並和買進持有、樣本外期間比較。</p>
+    </div>
+    <dl class="spec">
+      <dt>標的</dt><dd>萬海航運（2615）</dd>
+      <dt>期間</dt><dd>2020/7/30 – 2025/7/30，1,217 個交易日</dd>
+      <dt>資料</dt><dd>TEJ 日資料（開高低收、成交量）</dd>
+      <dt>初始資金</dt><dd>NT$1,000,000</dd>
+      <dt>交易成本</dt><dd>手續費 0.1425%（買賣各一次）、證交稅 0.3%（賣出）</dd>
+      <dt>工具</dt><dd>Python · pandas · NumPy · Matplotlib · Google Colab</dd>
+    </dl>
+  </header>
+
+  <div class="verdict">
+    <p>結論先說：<strong>三個版本都沒有贏過單純的買進持有。</strong>這個專案真正的收穫，是發現原本的夏普值算法高估了好幾倍，改用一致的方法重算，並用樣本外檢驗確認參數最佳化的結果撐不住。</p>
+    <div class="score" role="list">
+      <div role="listitem" class="hl"><span class="k">第三版（最終）資產</span><span class="v">147 萬</span><span class="s">總報酬 +46.9%</span></div>
+      <div role="listitem" class="hl"><span class="k">第三版夏普值</span><span class="v">0.40</span><span class="s">原本算成 2.44</span></div>
+      <div role="listitem"><span class="k">買進持有資產</span><span class="v">868 萬</span><span class="s">夏普值 1.05</span></div>
+      <div role="listitem"><span class="k">樣本外最佳參數</span><span class="v">−25.4%</span><span class="s">同期持有 +31.1%</span></div>
+    </div>
+  </div>
+
+  <!-- ============ 方法 ============ -->
+  <section id="method">
+    <p class="sec-label">METHOD</p>
+    <h2>方法</h2>
+    <div class="prose">
+      <p>資料是萬海從 2020 年 7 月到 2025 年 7 月的日資料。程式先把 Excel 讀成 DataFrame、轉換日期並由舊到新排序，再用收盤價計算四種技術指標。每個指標都會產生「買進訊號」與「賣出訊號」兩欄布林值，回測迴圈每天檢查一次。</p>
+    </div>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>指標</th><th style="text-align:left">計算方式</th><th style="text-align:left">買進</th><th style="text-align:left">賣出</th><th>使用版本</th></tr></thead>
+        <tbody>
+          <tr><td>MACD</td><td style="text-align:left">EMA(快) − EMA(慢)，訊號線為其 EMA</td><td style="text-align:left">黃金交叉</td><td style="text-align:left">死亡交叉</td><td>V1 V2 V3</td></tr>
+          <tr><td>乖離率</td><td style="text-align:left">(收盤價 − MA20) ÷ MA20</td><td style="text-align:left">低於 −門檻</td><td style="text-align:left">高於 +門檻</td><td>V1 V2 V3</td></tr>
+          <tr><td>布林通道</td><td style="text-align:left">MA20 ± 2 倍標準差</td><td style="text-align:left">跌破下軌</td><td style="text-align:left">突破上軌</td><td>V2</td></tr>
+          <tr><td>RSI(14)</td><td style="text-align:left">14 日平均漲幅 ÷ 平均跌幅換算</td><td style="text-align:left">&lt; 30 超賣</td><td style="text-align:left">&gt; 70 超買</td><td>V2</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>交易規則</h3>
+<pre class="rules"><span class="c"># 每個交易日，以當日收盤價判斷並成交</span>
+<span class="k">若</span> 空手 且 任一啟用指標出現買訊   → 用全部現金買進（取整股），扣手續費
+<span class="k">若</span> 持股 且 ( 任一啟用指標出現賣訊
+          或 報酬率 ≤ −停損門檻
+          或 報酬率 ≥ +停利門檻 )  → 全部賣出，扣手續費與證交稅
+<span class="c"># 不做空、不加碼、不分批；每天記錄 現金 + 持股市值 = 資產淨值</span></pre>
+
+    <h3>績效指標（最終版統一的算法）</h3>
+    <div class="grid2">
+      <div class="card"><h4>年化報酬率</h4><p>(1 + 總報酬率)<sup>365 ÷ 天數</sup> − 1</p></div>
+      <div class="card"><h4>夏普值</h4><p>每日淨值報酬的平均 ÷ 標準差 × √252，無風險利率設為 0</p></div>
+      <div class="card"><h4>最大回撤</h4><p>資產淨值相對前一個高點的最大跌幅，同時記錄高點與低點日期</p></div>
+      <div class="card"><h4>勝率與獲利因子</h4><p>一買一賣算一筆，扣除成本後淨報酬 &gt; 0 為獲利；獲利因子 = 總獲利 ÷ 總虧損</p></div>
+    </div>
+  </section>
+
+  <!-- ============ 改版歷程 ============ -->
+  <section id="versions">
+    <p class="sec-label">ITERATIONS</p>
+    <h2>改版歷程</h2>
+    <p class="prose">五個步驟依時間順序進行。前三步在調整策略，後兩步在調整「怎麼評估策略」，而後者改變了整個專案的結論。</p>
+
+    <ol class="timeline">
+      <li>
+        <div class="tl-h"><strong>第一版：MACD × 乖離率</strong><span class="r">MACD 12/26/9 · 乖離 ±5% · 停損 10% · 停利 20%</span></div>
+        <p>以兩個最常見的指標建立基準，任一訊號成立就進出場。完成 53 筆交易，總報酬 +10.2%。</p>
+      </li>
+      <li>
+        <div class="tl-h"><strong>第二版：加入 RSI 與布林通道</strong><span class="r">四個指標 · 任一成立即進出</span></div>
+        <p>想用更多指標過濾雜訊，結果交易增加到 55 筆，總報酬反而降到 +5.1%。訊號用「任一成立」合併時，指標越多只是讓進出更頻繁。</p>
+      </li>
+      <li>
+        <div class="tl-h"><strong>參數搜尋</strong><span class="r">MACD 1,100 組 · 乖離與停損停利 729 組</span></div>
+        <p>MACD 快線 6–15、慢線 20–30、訊號線 5–14 全部組合跑一次，以夏普值排序得到 9/21/5；乖離門檻 ±2%–±10%、停損 5/10/15%、停利 10/20/30% 得到 ±10%、停損 5%、停利 30%。</p>
+      </li>
+      <li>
+        <div class="tl-h"><strong>第三版：套用最佳參數</strong><span class="r">MACD 9/21/5 · 乖離 ±10% · 停損 5% · 停利 30%</span></div>
+        <p>回到第一版的兩個指標，換上搜尋出的參數。75 筆交易，總報酬 +46.9%，是三版中最好的。</p>
+      </li>
+      <li class="key">
+        <div class="tl-h"><strong>一致化重算與檢驗</strong><span class="r">最終版</span></div>
+        <p>把三版改寫成同一組函式，統一績效算法，補上買進持有基準、最大回撤，並把資料切成兩段做樣本外檢驗。下面的結果都來自這一步。</p>
+      </li>
+    </ol>
+
+    <h3>發現夏普值算錯了</h3>
+    <div class="prose">
+      <p>第一版與第三版原本把<b>每筆交易的報酬率</b>拿來算平均與標準差，再乘上 √252。√252 是把「日」報酬年化用的係數，套在平均持有 7 到 11 天的交易上，等於假設每天都完成一筆交易，夏普值因此被放大。改用每日資產淨值的報酬後，兩個版本的夏普值都只剩原本的六分之一左右。</p>
+    </div>
+    <div class="fix">
+      <div class="side">
+        <div class="lab">原本：逐筆交易報酬 × √252</div>
+        <code>r = trades['return']
+r.mean() / r.std() * np.sqrt(252)</code>
+        <div class="nums">V1 <b>2.12</b> &nbsp;→&nbsp; V3 <b>2.44</b></div>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="side after">
+        <div class="lab">修正：每日淨值報酬 × √252</div>
+        <code>r = equity.pct_change().dropna()
+r.mean() / r.std() * np.sqrt(252)</code>
+        <div class="nums">V1 <b>0.24</b> &nbsp;→&nbsp; V3 <b>0.40</b></div>
+      </div>
+    </div>
+    <p class="prose muted">勝率也一併改為扣除手續費與證交稅後的淨報酬計算，因此第三版的勝率由 38.7% 修正為 37.3%。</p>
+  </section>
+
+  <!-- ============ 結果 ============ -->
+  <section id="results">
+    <p class="sec-label">RESULTS</p>
+    <h2>結果</h2>
+
+    <figure>
+      <div class="plate"><img src="img/fig1_equity.png" alt="四條資產淨值曲線與回撤圖：買進持有最終 868 萬，第三版 147 萬，第一版 110 萬，第二版 105 萬" loading="lazy" width="1661" height="1022"></div>
+      <figcaption><b>圖 1　資產淨值與回撤。</b>2020 到 2021 年貨櫃航運大漲，萬海收盤價從約 10 元漲到 2021/7/1 的 210 元，買進持有一度超過 1,600 萬。三個策略在這段期間只有約一半的天數持股，而且頻繁出場，錯過了大部分漲幅。2022 年後股價長期下跌，策略的最大回撤仍有 −64% 到 −66%，只比買進持有的 −81% 少一些。</figcaption>
+    </figure>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>全期間（統一算法）</th><th><span class="sw" style="background:#3A3F52"></span>買進持有</th><th><span class="sw" style="background:#4F7CC9"></span>第一版</th><th><span class="sw" style="background:#A3ABC0"></span>第二版</th><th class="col-v3"><span class="sw" style="background:#6E4FB0"></span>第三版</th></tr></thead>
+        <tbody>
+          <tr><td>最終資產</td><td class="num">8,681,731</td><td class="num">1,101,580</td><td class="num">1,051,295</td><td class="num col-v3">1,469,254</td></tr>
+          <tr><td>總報酬率</td><td class="num">768.17%</td><td class="num">10.16%</td><td class="num">5.13%</td><td class="num col-v3">46.93%</td></tr>
+          <tr><td>年化報酬率</td><td class="num">54.03%</td><td class="num">1.95%</td><td class="num">1.00%</td><td class="num col-v3">7.99%</td></tr>
+          <tr><td>年化波動度</td><td class="num">59.34%</td><td class="num">37.58%</td><td class="num">37.59%</td><td class="num col-v3">35.60%</td></tr>
+          <tr><td>夏普值</td><td class="num">1.05</td><td class="num">0.24</td><td class="num">0.21</td><td class="num col-v3">0.40</td></tr>
+          <tr><td>最大回撤</td><td class="num">−80.77%</td><td class="num">−65.91%</td><td class="num">−66.26%</td><td class="num col-v3">−64.28%</td></tr>
+          <tr><td>回撤期間</td><td class="num">21/07/01 → 24/04/17</td><td class="num">21/09/24 → 23/09/01</td><td class="num">21/09/24 → 24/07/22</td><td class="num col-v3">21/07/29 → 23/11/29</td></tr>
+          <tr><td>持股天數比例</td><td class="num">100%</td><td class="num">53%</td><td class="num">54%</td><td class="num col-v3">44%</td></tr>
+          <tr><td>完成交易筆數</td><td class="num">—</td><td class="num">53</td><td class="num">55</td><td class="num col-v3">75</td></tr>
+          <tr><td>勝率</td><td class="num">—</td><td class="num">52.83%</td><td class="num">52.73%</td><td class="num col-v3">37.33%</td></tr>
+          <tr><td>平均獲利／平均虧損</td><td class="num">—</td><td class="num">10.88% / −10.01%</td><td class="num">10.41% / −9.76%</td><td class="num col-v3">12.16% / −5.60%</td></tr>
+          <tr><td>獲利因子</td><td class="num">—</td><td class="num">1.22</td><td class="num">1.19</td><td class="num col-v3">1.29</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:14px">四欄都已扣手續費 0.1425% 與證交稅 0.3%；買進持有假設第一天買進、最後一天賣出。</p>
+
+    <figure>
+      <div class="plate"><img src="img/fig3_metrics.png" alt="四個長條圖比較年化報酬率、夏普值、年化波動度與最大回撤" loading="lazy" width="1764" height="580"></div>
+      <figcaption><b>圖 2　四項風險報酬指標。</b>策略把年化波動度從 59% 降到 36% 左右，但報酬降得更多，所以夏普值反而比買進持有低。降低波動不等於提高風險調整後報酬。</figcaption>
+    </figure>
+
+    <h3>第三版為什麼比較好</h3>
+    <figure>
+      <div class="plate"><img src="img/fig4_trades.png" alt="三個版本每筆交易淨報酬的散布圖，以及出場原因的堆疊長條圖" loading="lazy" width="1764" height="673"></div>
+      <figcaption><b>圖 3　每筆交易與出場原因。</b>第三版的勝率從 53% 降到 37%，但平均虧損從 −10.0% 縮小到 −5.6%，平均獲利從 10.9% 提高到 12.2%，獲利因子因此由 1.22 升到 1.29。它靠的是「小賠、偶爾大賺」，而不是猜對方向的次數。</figcaption>
+    </figure>
+    <div class="grid2">
+      <div class="card"><span class="tag">觀察 1</span><h4>停利 30% 幾乎用不到</h4><p>75 筆裡只有 2 筆以停利出場，52 筆由 MACD 死亡交叉或乖離率賣訊出場。停利參數對結果影響很小，真正決定出場的是賣出訊號。</p></div>
+      <div class="card"><span class="tag">觀察 2</span><h4>停損 5% 實際虧更多</h4><p>21 筆停損交易的平均淨報酬是 −8.5%，最差 −11.0%。程式用收盤價判斷停損，遇到跳空下跌時只能在收盤以更低的價格出場。</p></div>
+    </div>
+
+    <figure>
+      <div class="plate"><img src="img/fig2_signals.png" alt="萬海股價與 MA20，標出第三版 75 筆交易的買賣點與持股期間，下方為 20 日乖離率" loading="lazy" width="1511" height="997"></div>
+      <figcaption><b>圖 4　第三版的買賣點。</b>平均持有 6.9 個交易日（第一版為 11.5 日）。2021 年上半年主升段中，股價常高於 MA20 超過 10%，乖離率賣訊讓策略在大漲途中反覆出場；2022 至 2023 年的下跌段，則常在反彈時買進後碰到停損。</figcaption>
+    </figure>
+
+    <figure>
+      <div class="plate"><img src="img/fig5_yearly.png" alt="2020 到 2025 年各年度四條策略的報酬率長條圖" loading="lazy" width="1500" height="654"></div>
+      <figcaption><b>圖 5　逐年報酬率。</b>策略的價值主要出現在下跌年度：2023 年第三版 −6.5%，買進持有 −24.1%。但 2020 與 2021 兩年買進持有分別上漲 220% 與 284%，策略只拿到其中一小部分，五年加總後差距無法彌補。</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 穩健性 ============ -->
+  <section id="robust">
+    <p class="sec-label">ROBUSTNESS</p>
+    <h2>穩健性檢驗</h2>
+    <div class="prose">
+      <p>第三版的參數是用 2020 到 2025 全期資料挑出來的，等於事先知道了未來的價格。為了確認它是否只是剛好符合這段歷史，最後做了兩項檢查。</p>
+    </div>
+
+    <h3>指標越多不一定越好</h3>
+    <figure>
+      <div class="plate"><img src="img/fig7_macd_heatmap.png" alt="純 MACD 策略在不同快線與慢線天數下的夏普值熱度圖，9/21 為最高 1.02" loading="lazy" width="1268" height="735"></div>
+      <figcaption><b>圖 6　只用 MACD 的參數熱度圖。</b>在參數搜尋那一步，只用 MACD 進出場的 1,100 組參數中，夏普值最低也有 0.41，全部高於三個組合版本；9/21/5 的總報酬達 324%。MACD 屬於追趨勢的指標，乖離率則是押注價格回到均線，兩者以「任一成立」合併時，乖離率會在上漲中提早賣出、在下跌中提早接刀，互相抵銷。這組結果同樣使用全期資料，只能說明方向，不能當作可用的策略。</figcaption>
+    </figure>
+
+    <h3>樣本外檢驗</h3>
+    <div class="prose">
+      <p>把資料切成兩段：用 2020/7–2022/12 從 162 組參數（2 組 MACD × 9 種乖離門檻 × 3 種停損 × 3 種停利）中選出夏普值最高的一組，再拿到沒看過的 2023/1–2025/7 測試。</p>
+    </div>
+    <figure>
+      <div class="plate"><img src="img/fig6_oos.png" alt="左圖比較樣本內與樣本外的夏普值，右圖為 162 組參數樣本內與樣本外夏普值的散布圖" loading="lazy" width="1763" height="692"></div>
+      <figcaption><b>圖 7　樣本內 vs. 樣本外。</b>樣本內最佳的參數（MACD 12/26/9、乖離 ±10%、停損 15%、停利 30%）在前段有 +91.7%、夏普值 0.84，到了後段變成 −25.4%、夏普值 −0.30；同一段買進持有是 +31.1%。162 組參數的兩段夏普值相關係數只有 0.25，只有 33% 的組合在樣本外是正的。前段表現好的參數，到後段大多不再有效。</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 結論 ============ -->
+  <section id="conclusion">
+    <p class="sec-label">CONCLUSION</p>
+    <h2>結論與反思</h2>
+    <div class="lessons">
+      <div><span class="n">01</span><div><h4>技術指標策略沒有打敗買進持有</h4><p>萬海在 2020–2021 年是強烈單邊上漲，頻繁進出的策略錯過主升段；到下跌段又沒有擋住大部分損失。對這種趨勢強、波動高的個股，持股天數比例本身就是報酬的主要來源。</p></div></div>
+      <div><span class="n">02</span><div><h4>評估方法比策略本身更重要</h4><p>同一份交易紀錄，夏普值可以是 2.44 也可以是 0.40。如果沒有統一算法、也沒有放上基準比較，前三版會看起來全部成功。</p></div></div>
+      <div><span class="n">03</span><div><h4>用全期資料挑參數會高估績效</h4><p>樣本內最佳的參數在樣本外轉為虧損。參數搜尋找到的多半是「最符合這段歷史」，不是「未來也有效」。</p></div></div>
+      <div><span class="n">04</span><div><h4>回測假設要寫清楚</h4><p>以收盤價判斷又以收盤價成交、停損用收盤價檢查，都會讓結果比實際交易樂觀。這些假設應該放進報告，而不是藏在程式裡。</p></div></div>
+    </div>
+
+    <h3>如果再做一次</h3>
+    <ul class="clean prose">
+      <li>收盤產生訊號、隔日開盤成交，並加入滑價，讓成交價更接近實際。</li>
+      <li>改用滾動式的樣本外驗證（walk-forward），每段都只用過去資料選參數。</li>
+      <li>擴大到其他航運股與大盤 ETF，看結論是否只發生在萬海。</li>
+      <li>加入部位控管，例如依波動度調整持股比例，而不是每次全額進出。</li>
+    </ul>
+
+    <h3>和我的工作的關係</h3>
+    <p class="prose">我在銀行負責 AI 徵審系統的 UAT 驗證，每天的工作是確認系統輸出是否可信。這個專案讓我在自己的程式上碰到同樣的問題：數字好看之前，要先確認它是用什麼方法算出來的、和什麼比較、換一段資料是否還成立。</p>
+  </section>
+
+  <footer>
+    <div>簡維均 Chien Wei-Jyun · 程式碼：<a href="https://github.com/chienweijyun03/2025-wanhai2615-backtest" target="_blank" rel="noopener">github.com/chienweijyun03/2025-wanhai2615-backtest</a> · <a href="https://chienweijyun03.github.io/">回作品集首頁</a></div>
+    <div>本頁所有數字皆由原始 notebook 以同一份資料重新執行驗證；部分程式碼與頁面整理在 AI 協助下完成。</div>
+    <div>本專案為個人學習用的歷史回測，不構成任何投資建議。</div>
+  </footer>
+</main>
+</body>
+</html>
